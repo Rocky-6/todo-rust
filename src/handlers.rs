@@ -1,11 +1,10 @@
 use axum::{
     async_trait,
-    extract::{Extension, FromRequest, Path},
+    extract::{Extension, FromRequest, Path, Request},
     http::StatusCode,
     response::IntoResponse,
-    BoxError, Json,
+    Json,
 };
-use hyper::Request;
 use serde::de::DeserializeOwned;
 use std::sync::Arc;
 use validator::Validate;
@@ -69,17 +68,14 @@ pub async fn delete_todo<T: TodoRepository>(
 pub struct ValidatedJson<T>(T);
 
 #[async_trait]
-impl<T, S, B> FromRequest<S, B> for ValidatedJson<T>
+impl<T, S> FromRequest<S> for ValidatedJson<T>
 where
     T: DeserializeOwned + Validate,
-    B: http_body::Body + Send + 'static,
-    B::Data: Send,
-    B::Error: Into<BoxError>,
     S: Send + Sync,
 {
     type Rejection = (StatusCode, String);
 
-    async fn from_request(req: Request<B>, state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
         let Json(value) = Json::<T>::from_request(req, state)
             .await
             .map_err(|rejection| {

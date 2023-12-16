@@ -38,10 +38,8 @@ async fn main() {
     let app = create_app(repository);
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     tracing::debug!("listening on {}", addr);
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
-        .await
-        .unwrap();
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    axum::serve(listener, app).await.unwrap();
 }
 
 fn create_app<T: TodoRepository>(repository: T) -> Router {
@@ -90,7 +88,9 @@ mod test {
     }
 
     async fn res_to_todo(res: Response) -> Todo {
-        let bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
+        let bytes = axum::body::to_bytes(res.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let body: String = String::from_utf8(bytes.to_vec()).unwrap();
         let todo: Todo = serde_json::from_str(&body)
             .expect(&format!("cannot convert Todo instance. body: {}", body));
@@ -102,7 +102,9 @@ mod test {
         let repository = TodoRepositoryForMemory::new();
         let req = Request::builder().uri("/").body(Body::empty()).unwrap();
         let res = create_app(repository).oneshot(req).await.unwrap();
-        let bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
+        let bytes = axum::body::to_bytes(res.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let body: String = String::from_utf8(bytes.to_vec()).unwrap();
         assert_eq!(body, "Hello, World!");
     }
@@ -131,7 +133,9 @@ mod test {
             .expect("failed create todo");
         let req = build_todo_req_with_empty("/todos", Method::GET);
         let res = create_app(repository).oneshot(req).await.unwrap();
-        let bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
+        let bytes = axum::body::to_bytes(res.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let body: String = String::from_utf8(bytes.to_vec()).unwrap();
         let todo: Vec<Todo> = serde_json::from_str(&body)
             .expect(&format!("cannot convert Todo instance. body: {}", body));
